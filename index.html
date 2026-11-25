@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="給高中生與體育班使用的多元表現小幫手。用點選或自述整理訓練、競賽與其他經歷，加入照片並匯出 PDF 和 Word。">
+  <meta name="description" content="給高中生與體育班使用的多元表現小幫手。點選訓練或比賽經歷，自動產生標題與內文，加入照片並匯出 PDF 和 Word。">
   <meta name="theme-color" content="#f2f5fa">
   <title>多元表現小幫手｜高中・體育班</title>
   <link rel="stylesheet" href="./styles.css?v=2">
-  <link rel="stylesheet" href="./sports.css">
-  <script type="module" src="./src/app.js?v=2"></script>
+  <link rel="stylesheet" href="./sports.css?v=2">
+  <script type="module" src="./src/app.js?v=3"></script>
 </head>
 <body>
   <header class="topbar">
@@ -28,7 +28,7 @@
     <section class="intro">
       <div class="intro-copy">
         <h1>把訓練和比賽寫成成果</h1>
-        <p>記下你練了什麼、改了哪一步，以及看得見的成果。</p>
+        <p>選項目、做法和成果，標題與內文會自動產生。</p>
       </div>
       <div class="intro-actions"><button class="button button--outline" id="example" type="button">看項目範例</button></div>
     </section>
@@ -36,8 +36,8 @@
     <div class="workspace">
       <section class="editor card" aria-label="編輯學習成果">
         <nav class="steps" aria-label="製作步驟" id="steps">
-          <button class="step" data-step="0" type="button"><span class="step-index">1</span><span>基本資料</span></button>
-          <button class="step" data-step="1" type="button"><span class="step-index">2</span><span>經歷與反思</span></button>
+          <button class="step" data-step="0" type="button"><span class="step-index">1</span><span>選項目</span></button>
+          <button class="step" data-step="1" type="button"><span class="step-index">2</span><span>選經歷</span></button>
           <button class="step" data-step="2" type="button"><span class="step-index">3</span><span>照片與定稿</span></button>
         </nav>
         <form class="panel" id="panel" autocomplete="off" novalidate></form>
@@ -46,7 +46,7 @@
 
       <section class="preview card" aria-label="成果預覽">
         <header class="preview-heading">
-          <div><h2 class="preview-title">成果預覽</h2><p id="preview-summary">填寫時會同步更新</p></div>
+          <div><h2 class="preview-title">成果預覽</h2><p id="preview-summary">點選後同步更新</p></div>
           <span class="preview-size">A4 直式</span>
         </header>
         <div class="preview-toolbar">

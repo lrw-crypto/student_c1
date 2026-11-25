@@ -1,6 +1,8 @@
 import { PROJECT_TYPES, getProjectType, generateReport, DEFAULT_PROMPTS } from './writing.js';
-import { SPORT_PROFILES, getSportProfile } from './sports.js';
-import { EXAMPLES } from './examples.js';
+import { SPORT_PROFILES, getSportProfile } from './sports.js?v=2';
+import { EXAMPLES } from './examples.js?v=2';
+import { CONTEXT_OPTIONS, EVIDENCE_OPTIONS, getContextLabel, getEventOptions, getEventLabel, getEvidenceLabel } from './events.js';
+import { generateTitle } from './titles.js';
 import { clearDraft, loadDraft, preparePhoto, saveDraft } from './storage.js';
 import { downloadDocx } from './docx.js';
 import { downloadPdf } from './pdf.js';
@@ -12,12 +14,13 @@ const themes = {
 };
 
 const defaultState = {
-  step: 0, mode: 'guided', type: '', customType: '', sport: '', customSport: '', title: '', name: '', department: '', date: '',
+  step: 0, mode: 'guided', type: '', customType: '', sport: '', customSport: '', event: '', context: '', title: '', name: '', department: '', date: '',
   role: '', focus: '', action: '', challengeChoice: '', challenge: '', outcomeChoice: '', outcome: '',
   reflectionChoice: '', reflection: '', narrative: '', photos: [], layout: 'text-first',
   theme: 'blue', finalSections: null, sample: '',
 };
 const maxPhotos = 6;
+const experienceChoices = ['context', 'role', 'focus', 'challengeChoice', 'outcomeChoice', 'reflectionChoice'];
 const sectionDefaults = [
   { id: 'overview', heading: '經歷摘要' },
   { id: 'action', heading: '我做了什麼' },
@@ -48,27 +51,45 @@ function clean(value) {
 }
 
 function sportLabel() {
-  return state.sport === 'other' ? clean(state.customSport) : getSportProfile(state.sport)?.label ?? '';
+  return state.sport === 'other'
+    ? clean(state.customSport)
+    : state.sport === 'general-track' ? '田徑' : getSportProfile(state.sport)?.label ?? '';
 }
 
 function activeProfile() {
-  return getSportProfile(state.sport) ?? getProjectType(state.type);
+  const category = getProjectType(state.type);
+  return getSportProfile(state.sport) ?? (category?.code ? category : getProjectType('summary'));
 }
 
 function report() {
   const base = generateReport(state.mode === 'guided' ? { ...state, narrative: '' } : {
-    title: state.title, type: state.type, narrative: state.narrative,
-  }, getSportProfile(state.sport));
+    type: state.type, narrative: state.narrative,
+  }, activeProfile());
   const sections = state.finalSections ?? base.sections;
+  const eventLabel = getEventLabel(state.sport, state.event);
+  const sport = sportLabel();
+  const contextLabel = getContextLabel(state.context);
+  const categoryLabel = state.type === 'custom' ? clean(state.customType) : base.typeLabel;
+  const title = clean(state.title) || generateTitle({
+    ...state,
+    ...(state.mode === 'narrative' ? { focus: '', challengeChoice: '', outcomeChoice: '', reflectionChoice: '', role: '' } : {}),
+    sportLabel: sport,
+    eventLabel: state.sport === 'other' ? sport || eventLabel : eventLabel,
+    customType: state.type === 'custom' ? state.customType : '',
+    categoryLabel,
+    contextLabel,
+  });
+  const selectedEvent = state.sport === 'other' ? sport || eventLabel : eventLabel;
+  const subject = state.sport === 'sprint' && selectedEvent ? `${selectedEvent}短跑` : selectedEvent || sport;
   return {
     ...base,
-    typeLabel: state.type === 'custom' ? clean(state.customType) : [base.typeCode, base.typeLabel].filter(Boolean).join(' '),
-    title: clean(state.title) || (state.type === 'custom' ? clean(state.customType) : '') || (!state.type && sportLabel()) || base.title,
+    typeLabel: [base.typeCode, categoryLabel].filter(Boolean).join(' '),
+    title,
     name: clean(state.name),
-    department: [...new Set([clean(state.department), sportLabel()].filter(Boolean))].join('　·　'),
+    department: [...new Set([clean(state.department), subject, contextLabel].filter(Boolean))].join('　·　'),
     date: clean(state.date),
     sections: sections.map(({ id, heading, text }) => ({ id, heading, text: clean(text) })).filter(section => section.text),
-    photos: state.photos,
+    photos: state.photos.map(photo => ({ ...photo, caption: clean(photo.caption) || getEvidenceLabel(photo.captionType) })),
     layout: state.layout,
     theme: themes[state.theme] ?? themes.blue,
   };
@@ -112,11 +133,13 @@ function preview() {
   const { sections, photos } = data;
   const count = Array.from(sections.map(section => section.text).join('').replace(/\s/g, '')).length;
   const over = count > 400;
-  const advice = over ? ' · 建議精簡至 400 字'
-    : !data.evidenceCount && !state.finalSections ? ' · 可補上一個親身細節' : '';
-  ui['preview-summary'].textContent = count ? `內文 ${count} 字${advice}` : '填寫時會同步更新';
+  ui['preview-summary'].textContent = count ? `內文 ${count} 字${over ? ' · 建議精簡至 400 字' : ''}` : '點選後同步更新';
+  for (const title of ui.panel.querySelectorAll('[data-generated-title]')) title.textContent = data.title;
+  for (const label of ui.panel.querySelectorAll('[data-title-label]')) label.textContent = clean(state.title) ? '自訂標題' : '自動標題';
+  for (const button of ui.panel.querySelectorAll('[data-auto-title]')) button.hidden = !clean(state.title);
   ui['preview-summary'].classList.toggle('over-limit', over);
   const hasContent = hasMaterial(data);
+  const hasTopic = hasContent || Boolean(state.sport || state.type || state.context);
   ui.paper.style.setProperty('--paper-accent', data.theme.accent);
   ui.paper.classList.toggle('paper--empty', !hasContent);
   const meta = [data.name, data.department, data.date].filter(Boolean).join('　·　');
@@ -133,7 +156,7 @@ function preview() {
     right = `<div class="preview-empty preview-empty--photo" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4 17 5-4 3 2 4-5 5 5"/></svg></div>`;
   }
   const kicker = data.typeLabel || '多元學習成果';
-  const header = `${kicker === data.title ? '' : `<p class="paper-kicker">${escape(kicker)}</p>`}<h2>${escape(hasContent ? data.title : '你的成果標題')}</h2>${meta ? `<p class="paper-meta">${escape(meta)}</p>` : ''}`;
+  const header = `${kicker === data.title ? '' : `<p class="paper-kicker">${escape(kicker)}</p>`}<h2>${escape(hasTopic ? data.title : '你的成果標題')}</h2>${meta ? `<p class="paper-meta">${escape(meta)}</p>` : ''}`;
   if (!ui.paper.children.length) {
     ui.paper.innerHTML = '<header class="paper-header"></header><div class="paper-body"><div class="paper-column"></div><div class="paper-column"></div></div>';
   }
@@ -184,11 +207,32 @@ function field(key, label, options = {}) {
 
 function chips(key, options, label) {
   if (!options?.length) return '';
-  return `<div class="chipset" role="group" aria-label="${escape(label)}">${options.map(option => `<button type="button" class="chip" data-choice="${key}" data-value="${escape(option)}" aria-pressed="${state[key] === option}">${escape(option)}</button>`).join('')}</div>`;
+  const buttons = options.map(option => {
+    const { id, label: text } = typeof option === 'string' ? { id: option, label: option } : option;
+    return `<button type="button" class="chip" data-choice="${key}" data-value="${escape(id)}" aria-pressed="${state[key] === id}">${escape(text)}</button>`;
+  }).join('');
+  return `<div class="chipset" role="group" aria-label="${escape(label)}">${buttons}</div>`;
+}
+
+function selectionGroup(key, options, label, written = '') {
+  if (!options?.length) return '';
+  return `<div class="selection-group"><span class="selection-heading">${label}${clean(written) ? ' <small class="field-hint">採用補寫內容</small>' : ''}</span>
+    ${chips(key, options, label)}</div>`;
+}
+
+function optionalFields(id, summary, body, open = false) {
+  return `<details class="optional-fields" data-optional="${escape(id)}"${open ? ' open' : ''}>
+    <summary>${summary}</summary><div class="optional-fields-body">${body}</div>
+  </details>`;
 }
 
 function panelIntro(title, description) {
   return `<h2 class="panel-title" id="panel-title" tabindex="-1">${title}</h2><p class="panel-description">${description}</p>`;
+}
+
+function titleCard(data) {
+  return `<div class="generated-title"><span class="automatic-label" data-title-label>${clean(state.title) ? '自訂標題' : '自動標題'}</span>
+    <strong data-generated-title>${escape(data.title)}</strong></div>`;
 }
 
 function basicsPanel() {
@@ -196,61 +240,69 @@ function basicsPanel() {
     return `<button type="button" class="choice" data-choice="type" data-value="${escape(type.id)}" aria-pressed="${state.type === type.id}"><span class="choice-code">${escape(type.code)}</span><strong>${escape(type.label)}</strong></button>`;
   }).join('');
   const sports = SPORT_PROFILES.map(sport => `<button type="button" class="sport-choice" data-choice="sport" data-value="${escape(sport.id)}" aria-pressed="${state.sport === sport.id}"><strong>${escape(sport.label)}</strong><span class="sport-description">${escape(sport.description)}</span></button>`).join('');
-  return `${panelIntro('設定這次的成果', '選活動類別。記錄訓練或比賽時，也可加選運動項目。')}
+  const eventOptions = getEventOptions(state.sport);
+  const eventHeading = state.sport === 'sprint' ? '距離（選填）' : '細項（選填）';
+  const metadata = `${state.type === 'custom' ? field('customType', '自訂類別', { placeholder: '例如：校隊訓練紀錄', max: 35 }) : ''}
+    ${state.sport === 'other' ? field('customSport', '自訂運動項目', { placeholder: '例如：羽球雙打', max: 35 }) : ''}
+    <div class="field-row">
+      ${field('name', '姓名', { placeholder: '例如：林同學', max: 32 })}
+      ${field('department', '班級或校隊', { placeholder: '例如：高二體育班', max: 36 })}
+    </div>
+    ${field('date', '活動時間', { placeholder: '例如：高二下學期', max: 36 })}`;
+  return `${panelIntro('選這次想記錄的項目', '點選運動項目和活動類別，下一步選經歷。')}
     <div class="field sport-field"><div class="field-heading" id="sport-label">運動項目（選填）</div>
       <div class="sport-grid" role="group" aria-labelledby="sport-label">${sports}</div>
-      ${state.sport === 'other' ? field('customSport', '自訂運動項目', { placeholder: '例如：羽球雙打、籃球', max: 35 }) : ''}
+      ${eventOptions.length ? `<div class="event-options"><div class="field-heading">${eventHeading}</div>${chips('event', eventOptions, eventHeading)}</div>` : ''}
     </div>
     <div class="field"><div class="field-heading" id="activity-label">高中多元表現類別</div>
       <div class="choice-grid" role="group" aria-labelledby="activity-label">${choices}<button type="button" class="choice choice--custom" data-choice="type" data-value="custom" aria-pressed="${state.type === 'custom'}"><strong>自訂類別</strong></button></div>
     </div>
-    ${state.type === 'custom' ? field('customType', '自訂類別', { placeholder: '例如：校隊訓練紀錄', max: 35 }) : ''}
-    ${field('title', '成果標題', { placeholder: '例如：100 公尺短跑｜從起跑找到突破', max: 64 })}
-    <div class="field-row">
-      ${field('name', '姓名（選填）', { placeholder: '例如：林同學', max: 32 })}
-      ${field('department', '班級或校隊（選填）', { placeholder: '例如：高二體育班', max: 36 })}
-    </div>
-    ${field('date', '活動時間（選填）', { placeholder: '例如：高二下學期', max: 36 })}`;
+    ${optionalFields('metadata', '補充資料（選填）', metadata)}`;
 }
 
 function experiencePanel() {
-  const type = activeProfile();
-  const sport = sportLabel();
+  const profile = activeProfile();
+  const sport = getEventLabel(state.sport, state.event) || sportLabel();
   const isSport = Boolean(state.sport);
-  const prompts = { ...DEFAULT_PROMPTS, ...type?.prompts };
+  const prompts = { ...DEFAULT_PROMPTS, ...profile?.prompts };
+  const count = experienceChoices.filter(key => state[key]).length;
   const modes = `<div class="mode-toggle" role="group" aria-label="撰寫方式">
     <button class="mode" data-choice="mode" data-value="guided" aria-pressed="${state.mode === 'guided'}" type="button">點選引導</button>
     <button class="mode" data-choice="mode" data-value="narrative" aria-pressed="${state.mode === 'narrative'}" type="button">自行敘述</button></div>`;
-  const pick = (key, label, preset, options, placeholder) => `<div class="field">
-    <label class="field-heading" for="field-${key}">${label}</label>
-    ${chips(preset, options, label)}
-    <textarea id="field-${key}" rows="2" maxlength="400" data-field="${key}" placeholder="${escape(placeholder)}">${escape(state[key])}</textarea>
-  </div>`;
-  return `${panelIntro(sport ? `寫下${escape(sport)}經歷` : '寫出你實際做的事',
-    isSport ? '點選符合的內容，或寫下當時的做法、調整和實際結果。' : '點選符合的內容，也可補上你的做法、成果和反思。')}${modes}
-    ${state.finalSections ? '<p class="tip">目前預覽採用你在定稿步驟修改的內文。可以在定稿區重新套用引導內容。</p>' : ''}
-    ${state.mode === 'narrative' ? field('narrative', '我的經歷', {
-      multiline: true, rows: 8, max: 1600,
-      placeholder: prompts.narrative,
-    }) : `
-    <div class="field">
-      <label class="field-heading" for="field-role">我的角色</label>
-      ${chips('role', type?.roles, '我的角色')}
-      <input type="text" id="field-role" data-field="role" maxlength="32" placeholder="${isSport ? '例如：4×100 公尺第三棒' : '也可以自己寫'}" value="${escape(state.role)}">
-    </div>
-    ${pick('action', isSport ? '訓練或比賽的做法' : '我做了什麼', 'focus', type?.focuses, prompts.action)}
-    ${pick('challenge', isSport ? '遇到的問題與調整' : '遇到的問題', 'challengeChoice', type?.challenges, prompts.challenge)}
-    ${pick('outcome', '成果與證據', 'outcomeChoice', type?.outcomes, prompts.outcome)}
-    ${pick('reflection', '我的反思', 'reflectionChoice', type?.reflections, prompts.reflection)}
-    <p class="tip">${isSport ? '填寫秒數、高度或距離時，加上單位，並標明是練習還是正式賽。' : '補上一個你親手做過的細節，或寫下有紀錄可查的成果。'}</p>`}`;
+  const written = state.mode === 'narrative' ? field('narrative', '我的經歷', {
+    multiline: true, rows: 6, max: 1600, placeholder: prompts.narrative,
+  }) : `<p class="field-hint">有補寫的段落會優先用你填的文字。</p>
+    ${field('role', '自訂角色', { max: 32 })}
+    ${field('action', '補寫做法', { multiline: true, max: 400, placeholder: prompts.action })}
+    ${field('challenge', '補寫困難', { multiline: true, max: 400, placeholder: prompts.challenge })}
+    ${field('outcome', '補寫成果', { multiline: true, max: 400, placeholder: prompts.outcome })}
+    ${field('reflection', '補寫反思', { multiline: true, max: 400, placeholder: prompts.reflection })}`;
+  return `${panelIntro(sport ? `選${escape(sport)}的經歷` : '選出你的經歷', '每組選一個符合的選項，沒有就跳過。')}
+    <div class="choice-summary"><span class="choice-summary-count">${count}</span><span class="choice-summary-label">個已選重點</span></div>
+    ${titleCard(report())}
+    ${state.mode === 'narrative' ? '<p class="tip">目前使用自述。點任一選項即可回到點選引導。</p>' : ''}
+    ${state.finalSections ? '<p class="tip">目前預覽採用你修改過的定稿，可在定稿區重新套用選項。</p>' : ''}
+    ${isSport ? selectionGroup('context', CONTEXT_OPTIONS, '這次的場合') : ''}
+    ${selectionGroup('focus', profile.focuses, isSport ? '我怎麼練或比賽' : '我做了什麼', state.action)}
+    ${selectionGroup('challengeChoice', profile.challenges, '我遇到的困難', state.challenge)}
+    ${selectionGroup('outcomeChoice', profile.outcomes, '我的成果', state.outcome)}
+    ${selectionGroup('reflectionChoice', profile.reflections, '下次怎麼做', state.reflection)}
+    ${selectionGroup('role', profile.roles, '我的角色（選填）')}
+    ${optionalFields('writing', '補寫或自行敘述（選填）', modes + written, state.mode === 'narrative')}`;
 }
 
 function photoCards() {
-  const captionPrompt = getSportProfile(state.sport)?.prompts.caption ?? '例如：比賽當天的動作或分工';
+  const captionPrompt = getSportProfile(state.sport)?.prompts.caption ?? '例如：我負責的活動或拍攝位置';
   return state.photos.map((photo, index) => `<div class="photo-item">
     <img class="photo-thumb" src="${escape(photo.src)}" alt="">
-    <div class="photo-info"><label class="field-heading" for="caption-${index}">照片 ${index + 1} 的說明</label>
-      <input type="text" id="caption-${index}" data-caption="${index}" maxlength="110" value="${escape(photo.caption)}" placeholder="${escape(captionPrompt)}"></div>
+    <div class="photo-info field"><label class="field-heading" for="caption-type-${index}">照片 ${index + 1} 圖說（選填）</label>
+      <select id="caption-type-${index}" data-caption-type="${index}">
+        <option value="">不加圖說</option>
+        ${EVIDENCE_OPTIONS.map(option => `<option value="${option.id}" ${photo.captionType === option.id ? 'selected' : ''}>${option.label}</option>`).join('')}
+      </select>
+      ${optionalFields(`caption-${photo.id}`, '自訂圖說（選填）', `<label class="sr-only" for="caption-${index}">自訂照片 ${index + 1} 圖說</label>
+        <input type="text" id="caption-${index}" data-caption="${index}" maxlength="110" value="${escape(photo.caption)}" placeholder="${escape(captionPrompt)}">`)}
+    </div>
     <div class="photo-actions">
       <button class="icon-button" type="button" data-photo="up" data-index="${index}" aria-label="上移照片 ${index + 1}" ${index === 0 ? 'disabled' : ''}>上移</button>
       <button class="icon-button" type="button" data-photo="down" data-index="${index}" aria-label="下移照片 ${index + 1}" ${index === state.photos.length - 1 ? 'disabled' : ''}>下移</button>
@@ -260,7 +312,16 @@ function photoCards() {
 
 function finalPanel() {
   const data = report();
-  return `${panelIntro('加入照片，確認內文', '上傳能看出過程或成果的照片，再檢查預覽版面。')}
+  const edits = `${field('title', '自訂成果標題', { placeholder: data.title, max: 64 })}
+    <button class="button button--quiet" type="button" data-auto-title ${clean(state.title) ? '' : 'hidden'}>使用自動標題</button>
+    <div class="final-header"><div><h3>定稿內文</h3><p class="field-hint">留空的段落不會匯出。</p></div>
+    <button class="button button--quiet" type="button" data-regenerate ${state.finalSections ? '' : 'disabled'}>重新套用選項</button></div>
+    ${sectionRows(data).map((section, index) => `<div class="field">
+      <label class="field-heading" for="final-${index}">${escape(section.heading)}</label>
+      <textarea id="final-${index}" data-final="${index}" rows="2" maxlength="1600">${escape(section.text)}</textarea>
+    </div>`).join('')}`;
+  return `${panelIntro('確認成果，下載檔案', '標題和內文已自動整理。也可以加入照片。')}
+    ${titleCard(data)}
     <div class="field">
       <div class="field-heading">成果照片 <span class="field-hint">（${state.photos.length} / ${maxPhotos}）</span></div>
       <button class="photo-drop" type="button" data-upload ${loadingPhotos || state.photos.length >= maxPhotos ? 'disabled' : ''}>
@@ -269,19 +330,18 @@ function finalPanel() {
       <input type="file" id="photo-input" accept="image/*" multiple hidden>
       <div class="photo-list">${photoCards()}</div>
     </div>
-    <div class="final-header"><div><h3>定稿內文</h3><p class="field-hint">可直接修改，留空的段落不會匯出。</p></div>
-    <button class="button button--quiet" type="button" data-regenerate ${state.finalSections ? '' : 'disabled'}>重新套用引導</button></div>
-    ${sectionRows(data).map((section, index) => `<div class="field">
-      <label class="field-heading" for="final-${index}">${escape(section.heading)}</label>
-      <textarea id="final-${index}" data-final="${index}" rows="2" maxlength="1600">${escape(section.text)}</textarea>
-    </div>`).join('')}`;
+    ${optionalFields('final', '修改標題和內文（選填）', edits, Boolean(state.finalSections || state.title))}`;
 }
 
 const panelRenderers = [basicsPanel, experiencePanel, finalPanel];
 
 function renderPanel() {
-  const sampleNote = state.sample ? '<p class="sample-note tip">示範草稿。請把經歷和數字改成自己的紀錄。</p>' : '';
+  const openDetails = new Set(Array.from(ui.panel.querySelectorAll('details[open]'), item => item.dataset.optional));
+  const sampleNote = state.sample ? '<p class="sample-note tip">示範草稿。請改選符合自己的經歷。</p>' : '';
   ui.panel.innerHTML = sampleNote + panelRenderers[state.step]();
+  for (const details of ui.panel.querySelectorAll('details')) {
+    if (openDetails.has(details.dataset.optional)) details.open = true;
+  }
   for (const button of ui.steps.querySelectorAll('button')) {
     if (Number(button.dataset.step) === state.step) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
@@ -308,7 +368,10 @@ function commit() {
 function selectChoice(button) {
   const { choice: key, value } = button.dataset;
   const oldProfile = activeProfile();
-  state[key] = state[key] === value && key !== 'mode' ? '' : value;
+  const resumesGuidance = state.mode === 'narrative' && experienceChoices.includes(key);
+  if (key === 'sport') state.event = '';
+  if (resumesGuidance) state.mode = 'guided';
+  state[key] = state[key] === value && key !== 'mode' && !resumesGuidance ? '' : value;
   if (['type', 'sport'].includes(key) && activeProfile() !== oldProfile) {
     if (oldProfile?.roles.includes(state.role)) state.role = '';
     state.focus = '';
@@ -424,8 +487,14 @@ ui.panel.addEventListener('click', async event => {
   if (button.dataset.choice) selectChoice(button);
   if (button.hasAttribute('data-upload')) document.getElementById('photo-input').click();
   if (button.dataset.photo) updatePhoto(button);
+  if (button.hasAttribute('data-auto-title')) {
+    state.title = '';
+    renderPanel();
+    commit();
+    document.getElementById('field-title')?.focus({ preventScroll: true });
+  }
   if (button.hasAttribute('data-regenerate') && await confirmAction(
-    '重新套用引導內容？', '定稿區目前的內文將以引導內容重新填入。', '重新套用',
+    '重新套用選項？', '定稿內文將依目前的選項重新產生。', '重新套用',
   )) {
     state.finalSections = null;
     renderPanel();
@@ -433,7 +502,12 @@ ui.panel.addEventListener('click', async event => {
   }
 });
 ui.panel.addEventListener('change', event => {
-  if (event.target.id === 'photo-input') void addPhotos(event.target.files);
+  const input = event.target;
+  if (input.id === 'photo-input') void addPhotos(input.files);
+  if (input.dataset.captionType !== undefined) {
+    state.photos[Number(input.dataset.captionType)].captionType = input.value;
+    commit();
+  }
 });
 for (const type of ['dragover', 'dragleave', 'drop']) {
   ui.panel.addEventListener(type, event => {
@@ -484,7 +558,7 @@ ui.example.addEventListener('click', () => {
   if (loadingPhotos) return;
   const dialog = ui['sample-dialog'];
   dialog.returnValue = '';
-  ui['sample-description'].textContent = hasDraft() ? '選擇範例會取代目前的草稿。' : '從一份示範草稿看寫法。';
+  ui['sample-description'].textContent = hasDraft() ? '選擇範例會取代目前的草稿。' : '選一份範例，看點選後的成果。';
   dialog.showModal();
 });
 ui['sample-dialog'].addEventListener('close', () => {
