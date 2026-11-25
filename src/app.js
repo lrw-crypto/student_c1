@@ -56,7 +56,7 @@ function activeProfile() {
 }
 
 function report() {
-  const base = generateReport(state.mode === 'guided' ? state : {
+  const base = generateReport(state.mode === 'guided' ? { ...state, narrative: '' } : {
     title: state.title, type: state.type, narrative: state.narrative,
   }, getSportProfile(state.sport));
   const sections = state.finalSections ?? base.sections;
@@ -216,6 +216,7 @@ function basicsPanel() {
 function experiencePanel() {
   const type = activeProfile();
   const sport = sportLabel();
+  const isSport = Boolean(state.sport);
   const prompts = { ...DEFAULT_PROMPTS, ...type?.prompts };
   const modes = `<div class="mode-toggle" role="group" aria-label="撰寫方式">
     <button class="mode" data-choice="mode" data-value="guided" aria-pressed="${state.mode === 'guided'}" type="button">點選引導</button>
@@ -226,7 +227,7 @@ function experiencePanel() {
     <textarea id="field-${key}" rows="2" maxlength="400" data-field="${key}" placeholder="${escape(placeholder)}">${escape(state[key])}</textarea>
   </div>`;
   return `${panelIntro(sport ? `寫下${escape(sport)}經歷` : '寫出你實際做的事',
-    sport ? '點選符合的內容，或寫下當時的做法、調整和實際結果。' : '點選符合的內容，也可補上你的做法、成果和反思。')}${modes}
+    isSport ? '點選符合的內容，或寫下當時的做法、調整和實際結果。' : '點選符合的內容，也可補上你的做法、成果和反思。')}${modes}
     ${state.finalSections ? '<p class="tip">目前預覽採用你在定稿步驟修改的內文。可以在定稿區重新套用引導內容。</p>' : ''}
     ${state.mode === 'narrative' ? field('narrative', '我的經歷', {
       multiline: true, rows: 8, max: 1600,
@@ -235,13 +236,13 @@ function experiencePanel() {
     <div class="field">
       <label class="field-heading" for="field-role">我的角色</label>
       ${chips('role', type?.roles, '我的角色')}
-      <input type="text" id="field-role" data-field="role" maxlength="32" placeholder="${sport ? '例如：4×100 公尺第三棒' : '也可以自己寫'}" value="${escape(state.role)}">
+      <input type="text" id="field-role" data-field="role" maxlength="32" placeholder="${isSport ? '例如：4×100 公尺第三棒' : '也可以自己寫'}" value="${escape(state.role)}">
     </div>
-    ${pick('action', sport ? '訓練或比賽的做法' : '我做了什麼', 'focus', type?.focuses, prompts.action)}
-    ${pick('challenge', sport ? '遇到的問題與調整' : '遇到的問題', 'challengeChoice', type?.challenges, prompts.challenge)}
+    ${pick('action', isSport ? '訓練或比賽的做法' : '我做了什麼', 'focus', type?.focuses, prompts.action)}
+    ${pick('challenge', isSport ? '遇到的問題與調整' : '遇到的問題', 'challengeChoice', type?.challenges, prompts.challenge)}
     ${pick('outcome', '成果與證據', 'outcomeChoice', type?.outcomes, prompts.outcome)}
     ${pick('reflection', '我的反思', 'reflectionChoice', type?.reflections, prompts.reflection)}
-    <p class="tip">${sport ? '填寫秒數、高度或距離時，加上單位，並標明是練習還是正式賽。' : '補上一個你親手做過的細節，或寫下有紀錄可查的成果。'}</p>`}`;
+    <p class="tip">${isSport ? '填寫秒數、高度或距離時，加上單位，並標明是練習還是正式賽。' : '補上一個你親手做過的細節，或寫下有紀錄可查的成果。'}</p>`}`;
 }
 
 function photoCards() {
