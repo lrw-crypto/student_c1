@@ -2,7 +2,7 @@ import { PROJECT_TYPES, getProjectType, generateReport, DEFAULT_PROMPTS } from '
 import { SPORT_PROFILES, getSportProfile } from './sports.js?v=2';
 import { EXAMPLES } from './examples.js?v=2';
 import { CONTEXT_OPTIONS, EVIDENCE_OPTIONS, getContextLabel, getEventOptions, getEventLabel, getEvidenceLabel } from './events.js';
-import { generateTitle } from './titles.js';
+import { generateTitle } from './titles.js?v=2';
 import { clearDraft, loadDraft, preparePhoto, saveDraft } from './storage.js';
 import { downloadDocx } from './docx.js';
 import { downloadPdf } from './pdf.js';
@@ -369,7 +369,10 @@ function selectChoice(button) {
   const { choice: key, value } = button.dataset;
   const oldProfile = activeProfile();
   const resumesGuidance = state.mode === 'narrative' && experienceChoices.includes(key);
-  if (key === 'sport') state.event = '';
+  if (key === 'sport') {
+    state.event = '';
+    state.context = '';
+  }
   if (resumesGuidance) state.mode = 'guided';
   state[key] = state[key] === value && key !== 'mode' && !resumesGuidance ? '' : value;
   if (['type', 'sport'].includes(key) && activeProfile() !== oldProfile) {
