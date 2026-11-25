@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="給高中生與體育班使用的多元表現小幫手。用點選或自述整理訓練、競賽與其他經歷，加入照片並匯出 PDF 和 Word。">
+  <meta name="theme-color" content="#f2f5fa">
+  <title>多元表現小幫手｜高中・體育班</title>
+  <link rel="stylesheet" href="./styles.css?v=2">
+  <link rel="stylesheet" href="./sports.css">
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 12h7M8 16h5"/></svg></span>
+        <div><strong>多元表現小幫手</strong><span class="brand-kicker">高中・體育班</span></div>
+      </div>
+      <div class="top-actions">
+        <span class="save-status" id="save-status" role="status">草稿儲存在這部裝置</span>
+        <button class="button button--quiet" id="reset" type="button">清空草稿</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="intro">
+      <div class="intro-copy">
+        <h1>把訓練和比賽寫成成果</h1>
+        <p>記下你練了什麼、改了哪一步，以及看得見的成果。</p>
+      </div>
+      <div class="intro-actions"><button class="button button--outline" id="example" type="button">看項目範例</button></div>
+    </section>
+
+    <div class="workspace">
+      <section class="editor card" aria-label="編輯學習成果">
+        <nav class="steps" aria-label="製作步驟" id="steps">
+          <button class="step" data-step="0" type="button"><span class="step-index">1</span><span>基本資料</span></button>
+          <button class="step" data-step="1" type="button"><span class="step-index">2</span><span>經歷與反思</span></button>
+          <button class="step" data-step="2" type="button"><span class="step-index">3</span><span>照片與定稿</span></button>
+        </nav>
+        <form class="panel" id="panel" autocomplete="off" novalidate></form>
+        <footer class="panel-footer" id="panel-footer"></footer>
+      </section>
+
+      <section class="preview card" aria-label="成果預覽">
+        <header class="preview-heading">
+          <div><h2 class="preview-title">成果預覽</h2><p id="preview-summary">填寫時會同步更新</p></div>
+          <span class="preview-size">A4 直式</span>
+        </header>
+        <div class="preview-toolbar">
+          <div class="layout-control">
+            <label for="layout">版型</label>
+            <select id="layout">
+              <option value="text-first">文字在左</option>
+              <option value="photo-first">照片在左</option>
+            </select>
+          </div>
+          <div class="theme-control" id="themes" aria-label="文件配色">
+            <button class="swatch" style="--swatch:#274996" data-theme="blue" aria-label="靛藍" type="button"></button>
+            <button class="swatch" style="--swatch:#24634e" data-theme="green" aria-label="墨綠" type="button"></button>
+            <button class="swatch" style="--swatch:#a14b32" data-theme="clay" aria-label="磚紅" type="button"></button>
+          </div>
+        </div>
+        <div class="paper-stage" tabindex="0" aria-label="A4 版面"><article class="paper" id="paper" aria-label="文件內容"></article></div>
+        <footer class="preview-footer">
+          <button class="button button--outline" id="download-word" type="button">下載 Word</button>
+          <button class="button button--primary" id="download-pdf" type="button">下載 PDF</button>
+        </footer>
+      </section>
+    </div>
+    <footer class="site-footer">資料和照片只儲存在目前的瀏覽器。下載檔案後，可備份或交件。</footer>
+  </main>
+  <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button class="button button--outline" value="cancel" autofocus>取消</button>
+        <button class="button button--primary" value="confirm" id="confirm-action">確認</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="sample-dialog" class="sample-dialog" aria-labelledby="sample-title" aria-describedby="sample-description">
+    <form method="dialog">
+      <h2 id="sample-title">選一份項目範例</h2>
+      <p id="sample-description"></p>
+      <div class="sample-options" id="sample-options"></div>
+      <div class="sample-actions"><button class="button button--outline" value="cancel" autofocus>取消</button></div>
+    </form>
+  </dialog>
+  <p class="toast" id="toast" role="status" hidden></p>
+</body>
+</html>
